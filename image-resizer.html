@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelForge — Image Resizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --panel: #111118;
+    --border: #222230;
+    --accent: #7fffb2;
+    --accent2: #ff6b6b;
+    --accent3: #6b9fff;
+    --text: #e8e8f0;
+    --muted: #666680;
+    --mono: 'Space Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(127,255,178,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127,255,178,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -1px;
+  }
+
+  .logo span { color: var(--text); }
+
+  .tagline {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  /* Drop Zone */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+    background: var(--panel);
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(127,255,178,0.03);
+  }
+
+  .drop-zone.has-image {
+    border-style: solid;
+    border-color: var(--border);
+    min-height: 400px;
+    padding: 0;
+  }
+
+  .drop-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 48px;
+    text-align: center;
+  }
+
+  .drop-icon {
+    width: 72px;
+    height: 72px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--accent);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .drop-icon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(127,255,178,0.1), transparent);
+  }
+
+  .drop-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .drop-sub {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .btn-upload {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 10px 24px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  .btn-upload:hover { opacity: 0.85; transform: translateY(-1px); }
+
+  #preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    max-height: 520px;
+    padding: 12px;
+  }
+
+  .img-info-bar {
+    display: none;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .img-info-bar.show { display: flex; }
+
+  .info-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .info-chip strong { color: var(--accent); }
+
+  /* Controls Panel */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-body { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* Preset Buttons */
+  .presets-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .preset-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+    line-height: 1.4;
+  }
+
+  .preset-btn:hover {
+    border-color: var(--accent);
+    background: rgba(127,255,178,0.05);
+  }
+
+  .preset-btn .preset-name { color: var(--text); display: block; font-weight: 700; }
+  .preset-btn .preset-dim { color: var(--muted); display: block; }
+
+  /* Divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    position: relative;
+  }
+
+  .divider-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* Inputs */
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .input-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .input-label {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  input[type="number"], select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  input[type="number"]:focus, select:focus {
+    border-color: var(--accent);
+  }
+
+  select {
+    cursor: pointer;
+  }
+
+  .lock-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: border-color 0.15s, color 0.15s;
+    flex-shrink: 0;
+    margin-top: 18px;
+  }
+
+  .lock-btn.locked {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Slider */
+  .slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .quality-val {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--accent);
+  }
+
+  /* Format selector */
+  .format-tabs {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+  }
+
+  .fmt-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--muted);
+    padding: 9px 0;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    letter-spacing: 1px;
+  }
+
+  .fmt-tab:last-child { border-right: none; }
+  .fmt-tab:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+  .fmt-tab.active { background: var(--accent); color: #000; font-weight: 700; }
+
+  /* Download Button */
+  .btn-download {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 14px 24px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: opacity 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .btn-download:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+  .btn-download:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+  /* Output preview size */
+  .output-estimate {
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+  }
+
+  .output-estimate strong { color: var(--accent3); }
+
+  /* Hidden canvas */
+  #canvas { display: none; }
+
+  /* Responsive */
+  @media (max-width: 780px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .logo { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="logo">Pixel<span>Forge</span></div>
+      <div class="tagline">// Image Resize & Export Tool</div>
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <!-- Left: Image Drop -->
+    <div>
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-placeholder" id="dropPlaceholder">
+          <div class="drop-icon">⬡</div>
+          <div class="drop-title">Drop your image here</div>
+          <div class="drop-sub">PNG, JPG, WEBP, GIF, BMP · Any size<br>Drag & drop or click to browse</div>
+          <button class="btn-upload" onclick="document.getElementById('fileInput').click()">Choose File</button>
+        </div>
+        <img id="preview-img" style="display:none;" alt="Preview">
+        <div class="img-info-bar" id="infoBar">
+          <div class="info-chip">📐 <strong id="origW">–</strong> × <strong id="origH">–</strong> px</div>
+          <div class="info-chip">💾 <strong id="origSize">–</strong></div>
+          <div class="info-chip">🖼 <strong id="origType">–</strong></div>
+        </div>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" style="display:none">
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <!-- Right: Controls -->
+    <div style="display:flex;flex-direction:column;gap:16px;">
+
+      <!-- Presets -->
+      <div class="panel">
+        <div class="panel-header">⚡ Quick Presets</div>
+        <div class="panel-body">
+          <div class="presets-grid" id="presetsGrid">
+            <button class="preset-btn" onclick="applyPreset(1080,1080)">
+              <span class="preset-name">Instagram Post</span>
+              <span class="preset-dim">1080 × 1080</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(1080,1920)">
+              <span class="preset-name">IG Story</span>
+              <span class="preset-dim">1080 × 1920</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(820,312)">
+              <span class="preset-name">FB Cover</span>
+              <span class="preset-dim">820 × 312</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(1500,500)">
+              <span class="preset-name">Twitter/X Header</span>
+              <span class="preset-dim">1500 × 500</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(1200,628)">
+              <span class="preset-name">OG / Share Card</span>
+              <span class="preset-dim">1200 × 628</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(800,800)">
+              <span class="preset-name">Etsy / Shop</span>
+              <span class="preset-dim">800 × 800</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(2480,3508)">
+              <span class="preset-name">A4 Print</span>
+              <span class="preset-dim">2480 × 3508</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(1920,1080)">
+              <span class="preset-name">HD Wallpaper</span>
+              <span class="preset-dim">1920 × 1080</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(3000,3000)">
+              <span class="preset-name">Canva Max</span>
+              <span class="preset-dim">3000 × 3000</span>
+            </button>
+            <button class="preset-btn" onclick="applyPreset(600,600)">
+              <span class="preset-name">Email Banner</span>
+              <span class="preset-dim">600 × 600</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dimensions -->
+      <div class="panel">
+        <div class="panel-header">📐 Dimensions</div>
+        <div class="panel-body">
+          <div class="input-row">
+            <div class="input-group">
+              <div class="input-label">Width (px)</div>
+              <input type="number" id="widthInput" value="1080" min="1" max="10000">
+            </div>
+            <button class="lock-btn locked" id="lockBtn" title="Lock aspect ratio" onclick="toggleLock()">🔒</button>
+            <div class="input-group">
+              <div class="input-label">Height (px)</div>
+              <input type="number" id="heightInput" value="1080" min="1" max="10000">
+            </div>
+          </div>
+
+          <div>
+            <div class="divider-label">Scale by %</div>
+            <div class="slider-group">
+              <div class="slider-header">
+                <span class="input-label">Scale factor</span>
+                <span class="quality-val" id="scaleVal">100%</span>
+              </div>
+              <input type="range" id="scaleSlider" min="1" max="300" value="100">
+            </div>
+          </div>
+
+          <div>
+            <div class="divider-label">Target file size</div>
+            <div class="input-row">
+              <div class="input-group">
+                <div class="input-label">Max size (KB)</div>
+                <input type="number" id="maxSizeKB" placeholder="e.g. 500" min="10">
+              </div>
+              <div class="input-group" style="flex:0.5;">
+                <div class="input-label">Mode</div>
+                <select id="fitMode">
+                  <option value="none">Free</option>
+                  <option value="fit">Fit</option>
+                  <option value="fill">Fill</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Format & Quality -->
+      <div class="panel">
+        <div class="panel-header">⚙ Format & Quality</div>
+        <div class="panel-body">
+          <div>
+            <div class="divider-label">Output format</div>
+            <div class="format-tabs" id="formatTabs">
+              <button class="fmt-tab active" data-fmt="jpeg" onclick="setFormat('jpeg',this)">JPG</button>
+              <button class="fmt-tab" data-fmt="png" onclick="setFormat('png',this)">PNG</button>
+              <button class="fmt-tab" data-fmt="webp" onclick="setFormat('webp',this)">WEBP</button>
+            </div>
+          </div>
+
+          <div id="qualityGroup">
+            <div class="slider-group">
+              <div class="slider-header">
+                <span class="input-label">Quality</span>
+                <span class="quality-val" id="qualVal">92%</span>
+              </div>
+              <input type="range" id="qualSlider" min="10" max="100" value="92">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Download -->
+      <div class="panel">
+        <div class="panel-body">
+          <div class="output-estimate" id="estimate">Upload an image to get started</div>
+          <button class="btn-download" id="downloadBtn" disabled onclick="downloadImage()">
+            ↓ Download Resized Image
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  let img = null;
+  let origW = 0, origH = 0;
+  let locked = true;
+  let selectedFormat = 'jpeg';
+  let originalFile = null;
+
+  const widthInput = document.getElementById('widthInput');
+  const heightInput = document.getElementById('heightInput');
+  const scaleSlider = document.getElementById('scaleSlider');
+  const qualSlider = document.getElementById('qualSlider');
+  const lockBtn = document.getElementById('lockBtn');
+
+  // File input
+  document.getElementById('fileInput').addEventListener('change', e => {
+    if(e.target.files[0]) loadFile(e.target.files[0]);
+  });
+
+  // Drag & drop
+  const dropZone = document.getElementById('dropZone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+  dropZone.addEventListener('click', e => {
+    if(e.target.closest('.btn-upload') || e.target.closest('#preview-img')) return;
+    if(!img) document.getElementById('fileInput').click();
+  });
+
+  function loadFile(file) {
+    originalFile = file;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const i = new Image();
+      i.onload = () => {
+        img = i;
+        origW = i.naturalWidth;
+        origH = i.naturalHeight;
+
+        // Show preview
+        const previewImg = document.getElementById('preview-img');
+        previewImg.src = ev.target.result;
+        previewImg.style.display = 'block';
+        document.getElementById('dropPlaceholder').style.display = 'none';
+        dropZone.classList.add('has-image');
+
+        // Info bar
+        document.getElementById('origW').textContent = origW;
+        document.getElementById('origH').textContent = origH;
+        document.getElementById('origSize').textContent = formatBytes(file.size);
+        document.getElementById('origType').textContent = file.type.split('/')[1].toUpperCase();
+        document.getElementById('infoBar').classList.add('show');
+
+        // Set inputs
+        widthInput.value = origW;
+        heightInput.value = origH;
+        scaleSlider.value = 100;
+        document.getElementById('scaleVal').textContent = '100%';
+
+        document.getElementById('downloadBtn').disabled = false;
+        updateEstimate();
+      };
+      i.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function formatBytes(b) {
+    if(b < 1024) return b + ' B';
+    if(b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(2) + ' MB';
+  }
+
+  function toggleLock() {
+    locked = !locked;
+    lockBtn.classList.toggle('locked', locked);
+    lockBtn.textContent = locked ? '🔒' : '🔓';
+  }
+
+  // Width change
+  widthInput.addEventListener('input', () => {
+    if(locked && img) {
+      const ratio = origH / origW;
+      heightInput.value = Math.round(widthInput.value * ratio);
+    }
+    updateScaleFromDims();
+    updateEstimate();
+  });
+
+  // Height change
+  heightInput.addEventListener('input', () => {
+    if(locked && img) {
+      const ratio = origW / origH;
+      widthInput.value = Math.round(heightInput.value * ratio);
+    }
+    updateScaleFromDims();
+    updateEstimate();
+  });
+
+  function updateScaleFromDims() {
+    if(img) {
+      const s = Math.round((widthInput.value / origW) * 100);
+      scaleSlider.value = Math.min(300, Math.max(1, s));
+      document.getElementById('scaleVal').textContent = scaleSlider.value + '%';
+    }
+  }
+
+  // Scale slider
+  scaleSlider.addEventListener('input', () => {
+    document.getElementById('scaleVal').textContent = scaleSlider.value + '%';
+    if(img) {
+      const scale = scaleSlider.value / 100;
+      widthInput.value = Math.round(origW * scale);
+      heightInput.value = Math.round(origH * scale);
+    }
+    updateEstimate();
+  });
+
+  qualSlider.addEventListener('input', () => {
+    document.getElementById('qualVal').textContent = qualSlider.value + '%';
+    updateEstimate();
+  });
+
+  function setFormat(fmt, btn) {
+    selectedFormat = fmt;
+    document.querySelectorAll('.fmt-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('qualityGroup').style.opacity = fmt === 'png' ? 0.4 : 1;
+    updateEstimate();
+  }
+
+  function applyPreset(w, h) {
+    if(!img) {
+      widthInput.value = w;
+      heightInput.value = h;
+      return;
+    }
+    locked = false;
+    lockBtn.classList.remove('locked');
+    lockBtn.textContent = '🔓';
+    widthInput.value = w;
+    heightInput.value = h;
+    updateScaleFromDims();
+    updateEstimate();
+  }
+
+  function updateEstimate() {
+    if(!img) return;
+    const w = parseInt(widthInput.value) || 1;
+    const h = parseInt(heightInput.value) || 1;
+    const q = qualSlider.value / 100;
+    // rough estimate
+    let estBytes;
+    if(selectedFormat === 'png') {
+      estBytes = w * h * 3 * 0.5;
+    } else if(selectedFormat === 'webp') {
+      estBytes = w * h * 3 * q * 0.15;
+    } else {
+      estBytes = w * h * 3 * q * 0.1;
+    }
+    document.getElementById('estimate').innerHTML =
+      `Output: <strong>${w} × ${h} px</strong> · Est. ~<strong>${formatBytes(estBytes)}</strong>`;
+  }
+
+  async function downloadImage() {
+    if(!img) return;
+
+    const btn = document.getElementById('downloadBtn');
+    btn.textContent = '⏳ Processing...';
+    btn.disabled = true;
+
+    await new Promise(r => setTimeout(r, 50));
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let tw = parseInt(widthInput.value) || origW;
+    let th = parseInt(heightInput.value) || origH;
+    const maxKB = parseInt(document.getElementById('maxSizeKB').value);
+    const fitMode = document.getElementById('fitMode').value;
+
+    canvas.width = tw;
+    canvas.height = th;
+    ctx.clearRect(0, 0, tw, th);
+
+    if(fitMode === 'fill') {
+      // Cover
+      const scale = Math.max(tw / origW, th / origH);
+      const sw = origW * scale, sh = origH * scale;
+      ctx.drawImage(img, (tw - sw) / 2, (th - sh) / 2, sw, sh);
+    } else if(fitMode === 'fit') {
+      // Contain
+      const scale = Math.min(tw / origW, th / origH);
+      const sw = origW * scale, sh = origH * scale;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, tw, th);
+      ctx.drawImage(img, (tw - sw) / 2, (th - sh) / 2, sw, sh);
+    } else {
+      ctx.drawImage(img, 0, 0, tw, th);
+    }
+
+    const mimeType = selectedFormat === 'jpeg' ? 'image/jpeg' :
+                     selectedFormat === 'png' ? 'image/png' : 'image/webp';
+    let quality = qualSlider.value / 100;
+
+    // Target file size loop
+    let dataURL;
+    if(maxKB && selectedFormat !== 'png') {
+      let lo = 0.1, hi = 1.0;
+      for(let i = 0; i < 12; i++) {
+        const mid = (lo + hi) / 2;
+        dataURL = canvas.toDataURL(mimeType, mid);
+        const bytes = Math.round((dataURL.length - 22) * 3 / 4);
+        if(bytes > maxKB * 1024) hi = mid;
+        else { lo = mid; quality = mid; }
+        if(hi - lo < 0.01) break;
+      }
+    }
+
+    dataURL = dataURL || canvas.toDataURL(mimeType, quality);
+
+    const ext = selectedFormat === 'jpeg' ? 'jpg' : selectedFormat;
+    const a = document.createElement('a');
+    a.href = dataURL;
+    a.download = `resized_${tw}x${th}.${ext}`;
+    a.click();
+
+    btn.innerHTML = '↓ Download Resized Image';
+    btn.disabled = false;
+    updateEstimate();
+  }
+</script>
+</body>
+</html>
